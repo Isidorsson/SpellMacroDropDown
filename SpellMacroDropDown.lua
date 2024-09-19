@@ -44,7 +44,7 @@ local function generateSpellMacro(spellId, macroType)
         spellName)
     local macroName = spellName
 
-    CreateMacro(macroName, icon, macroText, nil) -- Changed 1 to nil
+    CreateMacro(macroName, icon, macroText, true) -- Changed 1 to nil
     -- print("Macro created for " .. spellName .. " - " .. macroType)
     PickupMacro(macroName)
 end
@@ -105,7 +105,7 @@ end
 
 local isInitializied = false
 
-local addonFrame = CreateFrame("Frame") -- Renamed from frame to addonFrame
+local addonFrame = CreateFrame("Frame") 
 addonFrame:RegisterEvent("ADDON_LOADED")
 addonFrame:SetScript("OnEvent", function(_, event, addonName)
     if addonName == "Blizzard_PlayerSpells" then
