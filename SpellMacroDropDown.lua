@@ -5,18 +5,18 @@ MacroTemplate.__index = MacroTemplate
 function MacroTemplate.new()
     local self = setmetatable({}, MacroTemplate)
     self.types = {
-        NORMAL_CAST = "normalCast",
-        MOUSEOVER_BASIC = "mouseoverBasic",
-        MOUSEOVER_HARM = "mouseoverHarm",
-        MOUSEOVER_HELP = "mouseoverHelp",
-        MOUSEOVER_HARM_OR_HELP = "mouseoverHarmOrHelp",
-        MOUSEOVER_HARM_OR_HELP_OR_TARGET = "mouseoverHarmOrHelpOrTarget",
-        MOUSEOVER_CAST = "mouseoverCast",
-        CURSOR_CAST = "cursorCast",
-        CAST_PLAYER = "castPlayer",
-        RANDOM_FRIENDLY = "randomFriendly",
-        RANDOM_ENEMY = "randomEnemy",
-        CAST_FOCUS = "castFocus"
+        NORMAL_CAST = "Cast Normal",
+        MOUSEOVER_BASIC = "Cast @Mouseover",
+        MOUSEOVER_HARM = "Cast @Mouseover Harm",
+        MOUSEOVER_HELP = "Cast @Mouseover Help",
+        MOUSEOVER_HARM_OR_HELP = "Cast @Mouseover Harm/Help",
+        MOUSEOVER_HARM_OR_HELP_OR_TARGET = "Cast @Mouseover Harm/Help/Target",
+        MOUSEOVER_CAST = "Cast @Mouseover Any",
+        CURSOR_CAST = "Cast @Cursor",
+        CAST_PLAYER = "Cast @Self",
+        RANDOM_FRIENDLY = "Cast Random Friend",
+        RANDOM_ENEMY = "Cast Random Enemy",
+        CAST_FOCUS = "Cast @Focus"
     }
 
     self.templates = {
@@ -122,7 +122,7 @@ function SpellMacroUI:hookSpellButtons()
 
     for elementFrame in pool:EnumerateActiveByTemplate("SpellBookItemTemplate", "SPELL") do
         elementFrame.Button:HookScript("OnMouseUp", function(button_self, button)
-            if button == "RightButton" then
+            if button == "RightButton" and not IsAltKeyDown() or (button == "RightButton" and IsAltKeyDown()) then
                 button_self:SetAttribute("type", nil)
                 -- Use self_ref instead of SpellMacroUI
                 local menuItems = self_ref.spellMacroManager:generateMenuItems(elementFrame.spellBookItemInfo.spellID)
