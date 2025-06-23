@@ -5,6 +5,68 @@ MacroTemplate.__index = MacroTemplate
 function MacroTemplate.new()
     local self = setmetatable({}, MacroTemplate)
 
+    -- Define the order of categories
+    self.categoryOrder = {
+        "BASIC",
+        "TARGET",
+        "MOUSEOVER",
+        "PET",
+        "PARTY",
+        "CONDITIONAL",
+        "UTILITY"
+    }
+
+    -- Define the order of macros within each category
+    self.macroOrder = {
+        BASIC = {
+            "NORMAL_CAST",
+            "CAST_PLAYER",
+            "CURSOR_CAST"
+        },
+        TARGET = {
+            "CAST_TARGET",
+            "CAST_TARGETTARGET",
+            "CAST_FOCUS",
+            "CAST_ARENA1",
+            "CAST_ARENA2",
+            "CAST_ARENA3"
+        },
+        MOUSEOVER = {
+            "MOUSEOVER_BASIC",
+            "MOUSEOVER_HARM",
+            "MOUSEOVER_HELP",
+            "MOUSEOVER_HARM_OR_HELP",
+            "MOUSEOVER_SMART",
+            "MOUSEOVER_NODEAD"
+        },
+        PET = {
+            "CAST_PET",
+            "CAST_PETTARGET",
+            "MOUSEOVER_PET"
+        },
+        PARTY = {
+            "CAST_PARTY1",
+            "CAST_PARTY2",
+            "CAST_PARTY3",
+            "CAST_PARTY4",
+            "MOUSEOVER_PARTY",
+            "RANDOM_FRIENDLY"
+        },
+        CONDITIONAL = {
+            "HARM_HELP_AUTO",
+            "MODIFIER_SHIFT",
+            "MODIFIER_CTRL",
+            "MODIFIER_ALT",
+            "COMBAT_CONDITIONAL"
+        },
+        UTILITY = {
+            "STOPCASTING_CAST",
+            "CANCELAURA_CAST",
+            "SEQUENCE_CAST",
+            "RANDOM_ENEMY"
+        }
+    }
+
     -- Organized macro categories and types
     self.categories = {
         BASIC = {
@@ -129,7 +191,7 @@ function MacroTemplate.new()
 end
 
 function MacroTemplate:getTemplate(macroType)
-    return self.templates[macroType] or self.templates[self.types.NORMAL_CAST]
+    return self.templates[macroType] or self.templates.NORMAL_CAST
 end
 
 -- SpellMacroManager Class
@@ -145,25 +207,34 @@ end
 function SpellMacroManager:generateMenuItems(spellId)
     local menuItems = {}
 
-    -- Create hierarchical menu structure
-    for categoryKey, categoryData in pairs(self.macroTemplate.categories) do
-        local categoryItem = {
-            text = categoryData.name,
-            hasArrow = true,
-            menuList = {}
-        }
+    -- Create hierarchical menu structure using ordered iteration
+    for _, categoryKey in ipairs(self.macroTemplate.categoryOrder) do
+        local categoryData = self.macroTemplate.categories[categoryKey]
+        if categoryData then
+            local categoryItem = {
+                text = categoryData.name,
+                hasArrow = true,
+                menuList = {}
+            }
 
-        -- Add macros for this category
-        for macroKey, macroName in pairs(categoryData.macros) do
-            table.insert(categoryItem.menuList, {
-                text = macroName,
-                func = function()
-                    self:generateSpellMacro(spellId, macroKey)
+            -- Add macros for this category in the specified order
+            local macroOrderForCategory = self.macroTemplate.macroOrder[categoryKey]
+            if macroOrderForCategory then
+                for _, macroKey in ipairs(macroOrderForCategory) do
+                    local macroName = categoryData.macros[macroKey]
+                    if macroName then
+                        table.insert(categoryItem.menuList, {
+                            text = macroName,
+                            func = function()
+                                self:generateSpellMacro(spellId, macroKey)
+                            end
+                        })
+                    end
                 end
-            })
-        end
+            end
 
-        table.insert(menuItems, categoryItem)
+            table.insert(menuItems, categoryItem)
+        end
     end
 
     return menuItems
@@ -178,7 +249,21 @@ function SpellMacroManager:generateSpellMacro(spellId, macroType)
 
     local spellName = spellInfo.name
     local icon = spellInfo.iconID
-    local macroText = string.format(self.macroTemplate:getTemplate(macroType), spellName)
+    local template = self.macroTemplate:getTemplate(macroType)
+
+    -- Handle special cases that need multiple spell names or different formatting
+    local macroText
+    if macroType == "HARM_HELP_AUTO" then
+        macroText = string.format(template, spellName, spellName)
+    elseif macroType == "MODIFIER_SHIFT" then
+        macroText = string.format(template, spellName, spellName)
+    elseif macroType == "COMBAT_CONDITIONAL" then
+        macroText = string.format(template, spellName, spellName)
+    elseif macroType == "CANCELAURA_CAST" then
+        macroText = string.format(template, spellName, spellName)
+    else
+        macroText = string.format(template, spellName)
+    end
 
     local baseMacroName = spellName
     local macroName = baseMacroName
