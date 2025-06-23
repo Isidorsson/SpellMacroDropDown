@@ -113,29 +113,56 @@ function SpellMacroUI:initialize()
     end)
     macroButton:Show()
 
-    self:hookSpellButtons()
+    -- Hook spell buttons initially and on spellbook updates
+    self:hookAllSpellButtons()
+
+    -- Re-hook on spellbook updates (paging, etc)
+    if PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame and PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame.UpdateSpells then
+        hooksecurefunc(PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame, "UpdateSpells", function()
+            self:hookAllSpellButtons()
+        end)
+    end
 end
 
-function SpellMacroUI:hookSpellButtons()
-    local pool = PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame.framePoolCollection
-    local self_ref = self -- Store reference to SpellMacroUI instance
 
-    for elementFrame in pool:EnumerateActiveByTemplate("SpellBookItemTemplate", "SPELL") do
-        elementFrame.Button:HookScript("OnMouseUp", function(button_self, button)
-            if button == "RightButton" and not IsAltKeyDown() or (button == "RightButton" and IsAltKeyDown()) then
-                button_self:SetAttribute("type", nil)
-                -- Use self_ref instead of SpellMacroUI
-                local menuItems = self_ref.spellMacroManager:generateMenuItems(elementFrame.spellBookItemInfo.spellID)
-                MenuUtil.CreateContextMenu(button_self, function(ownerRegion, rootDescription)
-                    rootDescription:CreateTitle("Create Macro")
-                    for _, menuItem in ipairs(menuItems) do
-                        rootDescription:CreateButton(menuItem.text, function()
-                            menuItem.func()
-                        end)
-                    end
-                end)
+-- Hook both left and right spellbook pages (Dragonflight+)
+function SpellMacroUI:hookAllSpellButtons()
+    local self_ref = self
+    local pagedFrame = PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame
+    if not pagedFrame or not pagedFrame.framePoolCollection then return end
+
+    -- Dragonflight: left and right pages use different templates
+    local templates = {
+        {template = "SpellBookItemTemplate", kind = "SPELL"},
+        {template = "SpellBookItemTemplateRightPage", kind = "SPELL_RIGHT"},
+    }
+
+    for _, info in ipairs(templates) do
+        local pool = pagedFrame.framePoolCollection:GetPool(info.template, info.kind)
+        if pool then
+            for elementFrame in pool:EnumerateActive() do
+                if elementFrame.Button and not elementFrame.Button.__SMD_Hooked then
+                    elementFrame.Button:HookScript("OnMouseUp", function(button_self, button)
+                        if button == "RightButton" then
+                            button_self:SetAttribute("type", nil)
+                            local spellID = elementFrame.spellBookItemInfo and elementFrame.spellBookItemInfo.spellID
+                            if spellID then
+                                local menuItems = self_ref.spellMacroManager:generateMenuItems(spellID)
+                                MenuUtil.CreateContextMenu(button_self, function(ownerRegion, rootDescription)
+                                    rootDescription:CreateTitle("Create Macro")
+                                    for _, menuItem in ipairs(menuItems) do
+                                        rootDescription:CreateButton(menuItem.text, function()
+                                            menuItem.func()
+                                        end)
+                                    end
+                                end)
+                            end
+                        end
+                    end)
+                    elementFrame.Button.__SMD_Hooked = true
+                end
             end
-        end)
+        end
     end
 end
 
