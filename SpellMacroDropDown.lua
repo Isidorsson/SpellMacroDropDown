@@ -308,7 +308,7 @@ end
 function SpellMacroManager:generateSpellMacro(spellId, macroType)
     local spellInfo = C_Spell.GetSpellInfo(spellId)
     if not spellInfo then
-        print("Invalid spell ID: " .. spellId)
+        -- Invalid spell ID
         return
     end
 
@@ -342,7 +342,7 @@ function SpellMacroManager:generateSpellMacro(spellId, macroType)
 
     CreateMacro(macroName, icon, macroText, true)
     PickupMacro(macroName)
-    print("Created macro: " .. macroName)
+    -- Created macro successfully
 end
 
 -- ItemMacroManager Class
@@ -394,7 +394,7 @@ end
 function ItemMacroManager:generateItemMacro(itemID, slotID, macroType)
     local itemName, itemLink, _, _, _, _, _, _, _, itemTexture = GetItemInfo(itemID)
     if not itemName then
-        print("Invalid item ID: " .. itemID)
+        -- Invalid item ID
         return
     end
     
@@ -420,7 +420,7 @@ function ItemMacroManager:generateItemMacro(itemID, slotID, macroType)
     
     CreateMacro(macroName, itemTexture, macroText, true)
     PickupMacro(macroName)
-    print("Created item macro: " .. macroName)
+    -- Created item macro successfully
 end
 
 -- Improved SpellMacroUI Class with better hooking
@@ -583,24 +583,8 @@ end
 local ui = SpellMacroUI.new()
 
 -- Create slash command for manual initialization
-SLASH_SPELLMACRO1 = "/spellmacro"
-SLASH_SPELLMACRO2 = "/sm"
-SlashCmdList["SPELLMACRO"] = function(msg)
-    if msg == "char" or msg == "character" then
-        print("Manually setting up character frame hooks...")
-        ui:setupCharacterFrameHooks()
-    elseif msg == "debug" then
-        print("CharacterFrame exists:", CharacterFrame ~= nil)
-        if CharacterFrame then
-            print("CharacterFrame visible:", CharacterFrame:IsVisible())
-        end
-        print("Hooked slots:", #ui.hookedSlots)
-    else
-        print("SpellMacroDropDown commands:")
-        print("/sm char - Manually setup character frame hooks")
-        print("/sm debug - Show debug info")
-    end
-end
+-- Slash commands removed as they are no longer needed
+-- Character frame hooks are now set up automatically
 
 local addonFrame = CreateFrame("Frame")
 addonFrame:RegisterEvent("ADDON_LOADED")
@@ -621,7 +605,7 @@ local function attemptInitialization()
         return false
     end
 
-    print("SpellMacro: Failed to initialize after", maxInitAttempts, "attempts")
+    -- Failed to initialize after max attempts
     return false
 end
 
@@ -687,7 +671,7 @@ end)
 function SpellMacroUI:setupCharacterFrameHooks()
     local self_ref = self
     
-    print("Setting up character frame hooks...")
+    -- Setting up character frame hooks
     
     -- Track if we've successfully hooked the character frame
     self.characterFrameHooked = false
@@ -695,14 +679,14 @@ function SpellMacroUI:setupCharacterFrameHooks()
     -- Function to hook character frame when it's available
     local function hookCharacterFrame()
         if CharacterFrame then
-            print("CharacterFrame found, setting up hooks")
+            -- CharacterFrame found, setting up hooks
             
             -- Only hook OnShow once
             if not self_ref.characterFrameHooked then
                 self_ref.characterFrameHooked = true
                 
                 CharacterFrame:HookScript("OnShow", function()
-                    print("CharacterFrame shown, hooking equipment slots after delay...")
+                    -- CharacterFrame shown, hooking equipment slots after delay
                     -- Delay to ensure all equipment slots are created
                     C_Timer.After(0.5, function()
                         -- Clear and re-hook to ensure fresh hooks
@@ -714,7 +698,7 @@ function SpellMacroUI:setupCharacterFrameHooks()
             
             -- If character frame is already visible, hook immediately with delay
             if CharacterFrame:IsVisible() then
-                print("CharacterFrame already visible, hooking equipment slots...")
+                -- CharacterFrame already visible, hooking equipment slots
                 C_Timer.After(0.5, function()
                     self_ref.hookedSlots = {}
                     self_ref:hookEquipmentSlots()
@@ -733,7 +717,7 @@ function SpellMacroUI:setupCharacterFrameHooks()
         
         self.characterUIWatcher:SetScript("OnEvent", function(frame, event, arg1)
             if event == "ADDON_LOADED" and arg1 == "Blizzard_CharacterUI" then
-                print("Blizzard_CharacterUI loaded via event")
+                -- Blizzard_CharacterUI loaded via event
                 C_Timer.After(0.1, function()
                     hookCharacterFrame()
                 end)
@@ -758,7 +742,7 @@ function SpellMacroUI:setupCharacterFrameHooks()
     -- Attempt immediate hook with short delay
     C_Timer.After(0.1, function()
         if not hookCharacterFrame() then
-            print("Initial character frame hook failed, will retry via events")
+            -- Initial character frame hook failed, will retry via events
         end
     end)
     
@@ -781,7 +765,7 @@ function SpellMacroUI:setupCharacterFrameHooks()
 end
 
 function SpellMacroUI:hookEquipmentSlots()
-    print("Attempting to hook equipment slots...")
+    -- Attempting to hook equipment slots
     
     -- Equipment slot IDs
     local slotNames = {
@@ -815,36 +799,34 @@ function SpellMacroUI:hookEquipmentSlots()
             self.hookedSlots[slotID] = true
             hooked = hooked + 1
         else
-            print("Failed to find button for slot:", slotName)
+            -- Failed to find button for slot
         end
     end
     
-    print("Successfully hooked", hooked, "equipment slots")
+    -- Successfully hooked equipment slots
 end
 
 function SpellMacroUI:hookEquipmentButton(button, slotID)
     local self_ref = self
     
-    -- Debug print to verify hook is being applied
-    print("Hooking equipment slot:", slotID, button:GetName())
+    -- Hooking equipment slot
     
     -- Ensure button registers right-clicks
     button:RegisterForClicks("LeftButtonUp", "LeftButtonDown", "RightButtonUp", "RightButtonDown")
     
     -- Use HookScript for secure frames instead of SetScript
     button:HookScript("OnClick", function(button_self, mouseButton, down)
-        -- Debug print to verify clicks are being detected
-        print("Equipment slot clicked:", slotID, "Button:", mouseButton, "Down:", down)
+        -- Equipment slot clicked
         
         if mouseButton == "RightButton" and not down then
             -- Get equipped item
             local itemID = GetInventoryItemID("player", slotID)
-            print("Item ID found:", itemID)
+            -- Item ID found
             
             if itemID then
                 -- Generate and show menu
                 local menuItems = self_ref.itemMacroManager:generateItemMenuItems(itemID, slotID)
-                print("Menu items generated:", #menuItems)
+                -- Menu items generated
                 
                 MenuUtil.CreateContextMenu(button_self, function(ownerRegion, rootDescription)
                     rootDescription:CreateTitle("Create Item Macro")
