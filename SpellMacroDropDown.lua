@@ -280,7 +280,7 @@ function SpellMacroManager:generateSpellMacro(spellId, macroType)
     print("Created macro: " .. macroName)
 end
 
--- SpellMacroUI Class
+-- Improved SpellMacroUI Class with better hooking
 local SpellMacroUI = {}
 SpellMacroUI.__index = SpellMacroUI
 
@@ -288,6 +288,7 @@ function SpellMacroUI.new()
     local self = setmetatable({}, SpellMacroUI)
     self.isInitialized = false
     self.spellMacroManager = SpellMacroManager.new()
+    self.hookedButtons = {} -- Track hooked buttons
     return self
 end
 
@@ -306,26 +307,69 @@ function SpellMacroUI:initialize()
     end)
     macroButton:Show()
 
-    -- Hook spell buttons initially and on spellbook updates
-    self:hookAllSpellButtons()
+    -- Hook spellbook events more reliably
+    self:setupSpellbookHooks()
 
-    -- Re-hook on spellbook updates
-    if PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame and PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame.UpdateSpells then
-        hooksecurefunc(PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame, "UpdateSpells", function()
-            C_Timer.After(0.1, function() -- Small delay to ensure buttons are created
-                self:hookAllSpellButtons()
+    -- Initial hook attempt
+    self:hookAllSpellButtons()
+end
+
+function SpellMacroUI:setupSpellbookHooks()
+    local self_ref = self
+
+    -- Hook the spellbook frame show event
+    if PlayerSpellsFrame.SpellBookFrame then
+        PlayerSpellsFrame.SpellBookFrame:HookScript("OnShow", function()
+            C_Timer.After(0.2, function()
+                self_ref:hookAllSpellButtons()
             end)
         end)
     end
+
+    -- Hook page changes
+    local pagedFrame = PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame
+    if pagedFrame then
+        -- Hook UpdateSpells with longer delay
+        if pagedFrame.UpdateSpells then
+            hooksecurefunc(pagedFrame, "UpdateSpells", function()
+                C_Timer.After(0.3, function()
+                    self_ref:hookAllSpellButtons()
+                end)
+            end)
+        end
+
+        -- Hook page navigation
+        if pagedFrame.SetPage then
+            hooksecurefunc(pagedFrame, "SetPage", function()
+                C_Timer.After(0.2, function()
+                    self_ref:hookAllSpellButtons()
+                end)
+            end)
+        end
+    end
+
+    -- Hook spellbook category changes
+    if PlayerSpellsFrame.SpellBookFrame.CategoryDropdown then
+        local dropdown = PlayerSpellsFrame.SpellBookFrame.CategoryDropdown
+        if dropdown.SetSelectionID then
+            hooksecurefunc(dropdown, "SetSelectionID", function()
+                C_Timer.After(0.3, function()
+                    self_ref:hookAllSpellButtons()
+                end)
+            end)
+        end
+    end
 end
 
--- Hook spell buttons with proper right-click handling
+-- Simplified, more reliable hook method
 function SpellMacroUI:hookAllSpellButtons()
     local self_ref = self
     local pagedFrame = PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame
     if not pagedFrame or not pagedFrame.framePoolCollection then return end
 
-    -- Handle both left and right page templates
+    -- Clear old hooks to prevent conflicts
+    self.hookedButtons = {}
+
     local templates = {
         {template = "SpellBookItemTemplate", kind = "SPELL"},
         {template = "SpellBookItemTemplateRightPage", kind = "SPELL_RIGHT"},
@@ -335,117 +379,117 @@ function SpellMacroUI:hookAllSpellButtons()
         local pool = pagedFrame.framePoolCollection:GetPool(info.template, info.kind)
         if pool then
             for elementFrame in pool:EnumerateActive() do
-                if elementFrame.Button and not elementFrame.Button.__SMD_Hooked then
+                if elementFrame.Button and elementFrame.spellBookItemInfo and elementFrame.spellBookItemInfo.spellID then
+                    local buttonKey = tostring(elementFrame.Button)
 
-                    -- Method 1: Use PreClick to intercept and block right-clicks
-                    elementFrame.Button:SetScript("PreClick", function(button_self, button, down)
-                        if button == "RightButton" then
-                            -- Block the click entirely
-                            return
-                        end
-                    end)
-
-                    -- Method 2: Override the click handler completely
-                    elementFrame.Button:SetScript("OnClick", function(button_self, button, down)
-                        if button == "RightButton" then
-                            local spellID = elementFrame.spellBookItemInfo and elementFrame.spellBookItemInfo.spellID
-                            if spellID then
-                                local menuItems = self_ref.spellMacroManager:generateMenuItems(spellID)
-                                MenuUtil.CreateContextMenu(button_self, function(ownerRegion, rootDescription)
-                                    rootDescription:CreateTitle("Create Macro")
-
-                                    -- Create hierarchical menu
-                                    for _, categoryItem in ipairs(menuItems) do
-                                        if categoryItem.hasArrow and categoryItem.menuList then
-                                            -- Create submenu
-                                            local submenu = rootDescription:CreateButton(categoryItem.text)
-                                            for _, subItem in ipairs(categoryItem.menuList) do
-                                                submenu:CreateButton(subItem.text, subItem.func)
-                                            end
-                                        else
-                                            -- Regular menu item
-                                            rootDescription:CreateButton(categoryItem.text, categoryItem.func)
-                                        end
-                                    end
-                                end)
-                            end
-                            return -- Block further processing
-                        else
-                            -- For left clicks, let the default behavior happen
-                            -- We need to manually trigger the spell pickup since we're overriding OnClick
-                            if button == "LeftButton" and not down then
-                                local spellID = elementFrame.spellBookItemInfo and elementFrame.spellBookItemInfo.spellID
-                                if spellID then
-                                    C_Spell.PickupSpell(spellID)
-                                end
-                            end
-                        end
-                    end)
-
-                    -- Method 3: Disable right-click attribute entirely
-                    elementFrame.Button:RegisterForClicks("LeftButtonUp", "LeftButtonDown")
-
-                    -- Method 4: Create invisible overlay to catch right-clicks
-                    if not elementFrame.Button.rightClickBlocker then
-                        local blocker = CreateFrame("Button", nil, elementFrame.Button)
-                        blocker:SetAllPoints(elementFrame.Button)
-                        blocker:SetFrameLevel(elementFrame.Button:GetFrameLevel() + 1)
-                        blocker:RegisterForClicks("RightButtonUp")
-                        blocker:SetScript("OnClick", function(blocker_self, button)
-                            if button == "RightButton" then
-                                local spellID = elementFrame.spellBookItemInfo and elementFrame.spellBookItemInfo.spellID
-                                if spellID then
-                                    local menuItems = self_ref.spellMacroManager:generateMenuItems(spellID)
-                                    MenuUtil.CreateContextMenu(elementFrame.Button, function(ownerRegion, rootDescription)
-                                        rootDescription:CreateTitle("Create Macro")
-
-                                        -- Create hierarchical menu
-                                        for _, categoryItem in ipairs(menuItems) do
-                                            if categoryItem.hasArrow and categoryItem.menuList then
-                                                -- Create submenu
-                                                local submenu = rootDescription:CreateButton(categoryItem.text)
-                                                for _, subItem in ipairs(categoryItem.menuList) do
-                                                    submenu:CreateButton(subItem.text, subItem.func)
-                                                end
-                                            else
-                                                -- Regular menu item
-                                                rootDescription:CreateButton(categoryItem.text, categoryItem.func)
-                                            end
-                                        end
-                                    end)
-                                end
-                            end
-                        end)
-                        elementFrame.Button.rightClickBlocker = blocker
+                    -- Only hook if not already hooked
+                    if not self.hookedButtons[buttonKey] then
+                        self:hookSpellButton(elementFrame.Button, elementFrame.spellBookItemInfo.spellID)
+                        self.hookedButtons[buttonKey] = true
                     end
-
-                    elementFrame.Button.__SMD_Hooked = true
                 end
             end
         end
     end
 end
 
--- Initialize the addon
+function SpellMacroUI:hookSpellButton(button, spellID)
+    local self_ref = self
+
+    -- Store original click handler
+    local originalOnClick = button:GetScript("OnClick")
+
+    -- Set new click handler
+    button:SetScript("OnClick", function(button_self, mouseButton, down)
+        if mouseButton == "RightButton" and not down then
+            -- Handle right-click for macro creation
+            local menuItems = self_ref.spellMacroManager:generateMenuItems(spellID)
+            MenuUtil.CreateContextMenu(button_self, function(ownerRegion, rootDescription)
+                rootDescription:CreateTitle("Create Macro")
+
+                for _, categoryItem in ipairs(menuItems) do
+                    if categoryItem.hasArrow and categoryItem.menuList then
+                        local submenu = rootDescription:CreateButton(categoryItem.text)
+                        for _, subItem in ipairs(categoryItem.menuList) do
+                            submenu:CreateButton(subItem.text, subItem.func)
+                        end
+                    else
+                        rootDescription:CreateButton(categoryItem.text, categoryItem.func)
+                    end
+                end
+            end)
+        elseif mouseButton == "LeftButton" then
+            -- Don't override the default spellbook behavior
+            -- Let the default handler run by not preventing propagation
+            return
+        end
+    end)
+
+    -- Ensure button registers right-clicks
+    button:RegisterForClicks("LeftButtonUp", "LeftButtonDown", "RightButtonUp")
+end
+
+-- Enhanced initialization with multiple fallbacks
 local ui = SpellMacroUI.new()
 local addonFrame = CreateFrame("Frame")
 addonFrame:RegisterEvent("ADDON_LOADED")
 addonFrame:RegisterEvent("PLAYER_LOGIN")
+addonFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+
+local initAttempts = 0
+local maxInitAttempts = 5
+
+local function attemptInitialization()
+    initAttempts = initAttempts + 1
+
+    if PlayerSpellsFrame and PlayerSpellsFrame.SpellBookFrame and PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame then
+        ui:initialize()
+        return true
+    elseif initAttempts < maxInitAttempts then
+        C_Timer.After(1, attemptInitialization)
+        return false
+    end
+
+    print("SpellMacro: Failed to initialize after", maxInitAttempts, "attempts")
+    return false
+end
 
 addonFrame:SetScript("OnEvent", function(_, event, addonName)
     if event == "ADDON_LOADED" and addonName == "Blizzard_PlayerSpells" then
-        -- PlayerSpells addon loaded, hook when frame is shown
-        if PlayerSpellsFrame then
-            PlayerSpellsFrame:HookScript("OnShow", function()
-                ui:initialize()
-            end)
-        end
+        C_Timer.After(0.5, attemptInitialization)
     elseif event == "PLAYER_LOGIN" then
-        -- Fallback initialization
-        C_Timer.After(2, function()
-            if PlayerSpellsFrame and PlayerSpellsFrame:IsVisible() then
-                ui:initialize()
+        C_Timer.After(2, attemptInitialization)
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        C_Timer.After(3, attemptInitialization)
+    end
+end)
+
+-- Also hook when spellbook is manually opened
+local function hookSpellbookOpen()
+    if PlayerSpellsFrame then
+        PlayerSpellsFrame:HookScript("OnShow", function()
+            if not ui.isInitialized then
+                attemptInitialization()
+            else
+                -- Re-hook buttons when spellbook opens
+                C_Timer.After(0.2, function()
+                    ui:hookAllSpellButtons()
+                end)
             end
         end)
     end
-end)
+end
+
+-- Try to hook spellbook open immediately, or wait for it to be available
+if PlayerSpellsFrame then
+    hookSpellbookOpen()
+else
+    local checkFrame = CreateFrame("Frame")
+    checkFrame:RegisterEvent("ADDON_LOADED")
+    checkFrame:SetScript("OnEvent", function(_, event, addonName)
+        if addonName == "Blizzard_PlayerSpells" and PlayerSpellsFrame then
+            hookSpellbookOpen()
+            checkFrame:UnregisterEvent("ADDON_LOADED")
+        end
+    end)
+end
