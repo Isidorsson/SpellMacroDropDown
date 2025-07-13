@@ -15,6 +15,14 @@ function MacroTemplate.new()
         "CONDITIONAL",
         "UTILITY"
     }
+    
+    -- Item-specific category order
+    self.itemCategoryOrder = {
+        "ITEM_BASIC",
+        "ITEM_TARGET",
+        "ITEM_MOUSEOVER",
+        "ITEM_CONDITIONAL"
+    }
 
     -- Define the order of macros within each category
     self.macroOrder = {
@@ -64,6 +72,23 @@ function MacroTemplate.new()
             "CANCELAURA_CAST",
             "SEQUENCE_CAST",
             "RANDOM_ENEMY"
+        },
+        ITEM_BASIC = {
+            "ITEM_USE",
+            "ITEM_USE_SLOT"
+        },
+        ITEM_TARGET = {
+            "ITEM_USE_TARGET",
+            "ITEM_USE_FOCUS",
+            "ITEM_USE_PLAYER"
+        },
+        ITEM_MOUSEOVER = {
+            "ITEM_USE_MOUSEOVER",
+            "ITEM_USE_MOUSEOVER_HELP"
+        },
+        ITEM_CONDITIONAL = {
+            "ITEM_USE_COMBAT",
+            "ITEM_USE_MODIFIER"
         }
     }
 
@@ -136,6 +161,35 @@ function MacroTemplate.new()
                 SEQUENCE_CAST = "Sequence Cast",
                 RANDOM_ENEMY = "Random Enemy"
             }
+        },
+        ITEM_BASIC = {
+            name = "Basic Item Use",
+            macros = {
+                ITEM_USE = "Use Item",
+                ITEM_USE_SLOT = "Use Equipment Slot"
+            }
+        },
+        ITEM_TARGET = {
+            name = "Targeted Item Use",
+            macros = {
+                ITEM_USE_TARGET = "Use on Target",
+                ITEM_USE_FOCUS = "Use on Focus",
+                ITEM_USE_PLAYER = "Use on Self"
+            }
+        },
+        ITEM_MOUSEOVER = {
+            name = "Mouseover Item Use",
+            macros = {
+                ITEM_USE_MOUSEOVER = "Use on Mouseover",
+                ITEM_USE_MOUSEOVER_HELP = "Use on Friendly Mouseover"
+            }
+        },
+        ITEM_CONDITIONAL = {
+            name = "Conditional Item Use",
+            macros = {
+                ITEM_USE_COMBAT = "Use in/out of Combat",
+                ITEM_USE_MODIFIER = "Use with Modifier"
+            }
         }
     }
 
@@ -185,7 +239,18 @@ function MacroTemplate.new()
         STOPCASTING_CAST = "#showtooltip\n/stopcasting\n/cast %s",
         CANCELAURA_CAST = "#showtooltip\n/cancelaura %s\n/cast %s",
         SEQUENCE_CAST = "#showtooltip\n/castsequence reset=target %s",
-        RANDOM_ENEMY = "#showtooltip\n/targetenemyplayer\n/cast %s\n/cleartarget"
+        RANDOM_ENEMY = "#showtooltip\n/targetenemyplayer\n/cast %s\n/cleartarget",
+        
+        -- Item Macros
+        ITEM_USE = "#showtooltip\n/use %s",
+        ITEM_USE_SLOT = "#showtooltip\n/use %d",
+        ITEM_USE_TARGET = "#showtooltip\n/use [@target,exists,nodead] %s",
+        ITEM_USE_FOCUS = "#showtooltip\n/use [@focus,exists,nodead] %s",
+        ITEM_USE_PLAYER = "#showtooltip\n/use [@player] %s",
+        ITEM_USE_MOUSEOVER = "#showtooltip\n/use [@mouseover,exists] [] %s",
+        ITEM_USE_MOUSEOVER_HELP = "#showtooltip\n/use [@mouseover,help,nodead] [] %s",
+        ITEM_USE_COMBAT = "#showtooltip\n/use [combat] %s",
+        ITEM_USE_MODIFIER = "#showtooltip\n/use [mod:shift] %s"
     }
     return self
 end
@@ -280,6 +345,84 @@ function SpellMacroManager:generateSpellMacro(spellId, macroType)
     print("Created macro: " .. macroName)
 end
 
+-- ItemMacroManager Class
+local ItemMacroManager = {}
+ItemMacroManager.__index = ItemMacroManager
+
+function ItemMacroManager.new()
+    local self = setmetatable({}, ItemMacroManager)
+    self.macroTemplate = MacroTemplate.new()
+    return self
+end
+
+function ItemMacroManager:generateItemMenuItems(itemID, slotID)
+    local menuItems = {}
+    
+    -- Create hierarchical menu structure for items
+    for _, categoryKey in ipairs(self.macroTemplate.itemCategoryOrder) do
+        local categoryData = self.macroTemplate.categories[categoryKey]
+        if categoryData then
+            local categoryItem = {
+                text = categoryData.name,
+                hasArrow = true,
+                menuList = {}
+            }
+            
+            -- Add macros for this category in the specified order
+            local macroOrderForCategory = self.macroTemplate.macroOrder[categoryKey]
+            if macroOrderForCategory then
+                for _, macroKey in ipairs(macroOrderForCategory) do
+                    local macroName = categoryData.macros[macroKey]
+                    if macroName then
+                        table.insert(categoryItem.menuList, {
+                            text = macroName,
+                            func = function()
+                                self:generateItemMacro(itemID, slotID, macroKey)
+                            end
+                        })
+                    end
+                end
+            end
+            
+            table.insert(menuItems, categoryItem)
+        end
+    end
+    
+    return menuItems
+end
+
+function ItemMacroManager:generateItemMacro(itemID, slotID, macroType)
+    local itemName, itemLink, _, _, _, _, _, _, _, itemTexture = GetItemInfo(itemID)
+    if not itemName then
+        print("Invalid item ID: " .. itemID)
+        return
+    end
+    
+    local template = self.macroTemplate:getTemplate(macroType)
+    local macroText
+    
+    -- Use slot ID for equipment slot macros, item name for others
+    if macroType == "ITEM_USE_SLOT" and slotID then
+        macroText = string.format(template, slotID)
+    else
+        macroText = string.format(template, itemName)
+    end
+    
+    local baseMacroName = itemName
+    local macroName = baseMacroName
+    local counter = 1
+    
+    -- Ensure unique macro name
+    while GetMacroInfo(macroName) do
+        macroName = baseMacroName .. counter
+        counter = counter + 1
+    end
+    
+    CreateMacro(macroName, itemTexture, macroText, true)
+    PickupMacro(macroName)
+    print("Created item macro: " .. macroName)
+end
+
 -- Improved SpellMacroUI Class with better hooking
 local SpellMacroUI = {}
 SpellMacroUI.__index = SpellMacroUI
@@ -288,7 +431,9 @@ function SpellMacroUI.new()
     local self = setmetatable({}, SpellMacroUI)
     self.isInitialized = false
     self.spellMacroManager = SpellMacroManager.new()
+    self.itemMacroManager = ItemMacroManager.new()
     self.hookedButtons = {} -- Track hooked buttons
+    self.hookedSlots = {} -- Track hooked equipment slots
     return self
 end
 
@@ -302,13 +447,18 @@ function SpellMacroUI:initialize()
     macroButton:SetText("Macros")
     macroButton:SetPoint("TOPRIGHT", PlayerSpellsFrame.SpellBookFrame, "TOPRIGHT", -30, -40)
     macroButton:SetScript("OnClick", function()
-        MacroFrame_LoadUI()
+        if not C_AddOns.IsAddOnLoaded("Blizzard_MacroUI") then
+            C_AddOns.LoadAddOn("Blizzard_MacroUI")
+        end
         ShowUIPanel(MacroFrame)
     end)
     macroButton:Show()
 
     -- Hook spellbook events more reliably
     self:setupSpellbookHooks()
+    
+    -- Setup character frame hooks (will handle its own loading)
+    self:setupCharacterFrameHooks()
 
     -- Initial hook attempt
     self:hookAllSpellButtons()
@@ -431,6 +581,27 @@ end
 
 -- Enhanced initialization with multiple fallbacks
 local ui = SpellMacroUI.new()
+
+-- Create slash command for manual initialization
+SLASH_SPELLMACRO1 = "/spellmacro"
+SLASH_SPELLMACRO2 = "/sm"
+SlashCmdList["SPELLMACRO"] = function(msg)
+    if msg == "char" or msg == "character" then
+        print("Manually setting up character frame hooks...")
+        ui:setupCharacterFrameHooks()
+    elseif msg == "debug" then
+        print("CharacterFrame exists:", CharacterFrame ~= nil)
+        if CharacterFrame then
+            print("CharacterFrame visible:", CharacterFrame:IsVisible())
+        end
+        print("Hooked slots:", #ui.hookedSlots)
+    else
+        print("SpellMacroDropDown commands:")
+        print("/sm char - Manually setup character frame hooks")
+        print("/sm debug - Show debug info")
+    end
+end
+
 local addonFrame = CreateFrame("Frame")
 addonFrame:RegisterEvent("ADDON_LOADED")
 addonFrame:RegisterEvent("PLAYER_LOGIN")
@@ -490,6 +661,206 @@ else
         if addonName == "Blizzard_PlayerSpells" and PlayerSpellsFrame then
             hookSpellbookOpen()
             checkFrame:UnregisterEvent("ADDON_LOADED")
+        end
+    end)
+end
+
+-- Ensure character frame hooks are set up independently
+local characterInitFrame = CreateFrame("Frame")
+characterInitFrame:RegisterEvent("PLAYER_LOGIN")
+characterInitFrame:RegisterEvent("ADDON_LOADED")
+characterInitFrame:SetScript("OnEvent", function(frame, event, arg1)
+    if event == "PLAYER_LOGIN" then
+        -- Setup character frame hooks on player login
+        C_Timer.After(2, function()
+            ui:setupCharacterFrameHooks()
+        end)
+    elseif event == "ADDON_LOADED" and arg1 == "SpellMacroDropDown" then
+        -- Also try during our own addon load
+        C_Timer.After(1, function()
+            ui:setupCharacterFrameHooks()
+        end)
+    end
+end)
+
+-- Equipment slot functions and hooks
+function SpellMacroUI:setupCharacterFrameHooks()
+    local self_ref = self
+    
+    print("Setting up character frame hooks...")
+    
+    -- Track if we've successfully hooked the character frame
+    self.characterFrameHooked = false
+    
+    -- Function to hook character frame when it's available
+    local function hookCharacterFrame()
+        if CharacterFrame then
+            print("CharacterFrame found, setting up hooks")
+            
+            -- Only hook OnShow once
+            if not self_ref.characterFrameHooked then
+                self_ref.characterFrameHooked = true
+                
+                CharacterFrame:HookScript("OnShow", function()
+                    print("CharacterFrame shown, hooking equipment slots after delay...")
+                    -- Delay to ensure all equipment slots are created
+                    C_Timer.After(0.5, function()
+                        -- Clear and re-hook to ensure fresh hooks
+                        self_ref.hookedSlots = {}
+                        self_ref:hookEquipmentSlots()
+                    end)
+                end)
+            end
+            
+            -- If character frame is already visible, hook immediately with delay
+            if CharacterFrame:IsVisible() then
+                print("CharacterFrame already visible, hooking equipment slots...")
+                C_Timer.After(0.5, function()
+                    self_ref.hookedSlots = {}
+                    self_ref:hookEquipmentSlots()
+                end)
+            end
+            return true
+        end
+        return false
+    end
+    
+    -- Create a persistent frame to handle character UI loading
+    if not self.characterUIWatcher then
+        self.characterUIWatcher = CreateFrame("Frame")
+        self.characterUIWatcher:RegisterEvent("ADDON_LOADED")
+        self.characterUIWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
+        
+        self.characterUIWatcher:SetScript("OnEvent", function(frame, event, arg1)
+            if event == "ADDON_LOADED" and arg1 == "Blizzard_CharacterUI" then
+                print("Blizzard_CharacterUI loaded via event")
+                C_Timer.After(0.1, function()
+                    hookCharacterFrame()
+                end)
+            elseif event == "PLAYER_ENTERING_WORLD" then
+                -- Try to load the addon if not already loaded
+                if not C_AddOns.IsAddOnLoaded("Blizzard_CharacterUI") then
+                    C_AddOns.LoadAddOn("Blizzard_CharacterUI")
+                end
+                -- Always attempt to hook on entering world
+                C_Timer.After(1, function()
+                    hookCharacterFrame()
+                end)
+            end
+        end)
+    end
+    
+    -- Try to load and hook immediately
+    if not C_AddOns.IsAddOnLoaded("Blizzard_CharacterUI") then
+        C_AddOns.LoadAddOn("Blizzard_CharacterUI")
+    end
+    
+    -- Attempt immediate hook with short delay
+    C_Timer.After(0.1, function()
+        if not hookCharacterFrame() then
+            print("Initial character frame hook failed, will retry via events")
+        end
+    end)
+    
+    -- Also monitor equipment changes
+    if not self.equipmentWatcher then
+        self.equipmentWatcher = CreateFrame("Frame")
+        self.equipmentWatcher:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+        self.equipmentWatcher:SetScript("OnEvent", function(_, event, slotID)
+            if CharacterFrame and CharacterFrame:IsVisible() then
+                -- Debounce equipment changes
+                if self_ref.equipmentChangeTimer then
+                    self_ref.equipmentChangeTimer:Cancel()
+                end
+                self_ref.equipmentChangeTimer = C_Timer.NewTimer(0.5, function()
+                    self_ref:hookEquipmentSlots()
+                end)
+            end
+        end)
+    end
+end
+
+function SpellMacroUI:hookEquipmentSlots()
+    print("Attempting to hook equipment slots...")
+    
+    -- Equipment slot IDs
+    local slotNames = {
+        [1] = "HeadSlot",
+        [2] = "NeckSlot",
+        [3] = "ShoulderSlot",
+        [4] = "ShirtSlot",
+        [5] = "ChestSlot",
+        [6] = "WaistSlot",
+        [7] = "LegsSlot",
+        [8] = "FeetSlot",
+        [9] = "WristSlot",
+        [10] = "HandsSlot",
+        [11] = "Finger0Slot",
+        [12] = "Finger1Slot",
+        [13] = "Trinket0Slot",
+        [14] = "Trinket1Slot",
+        [15] = "BackSlot",
+        [16] = "MainHandSlot",
+        [17] = "SecondaryHandSlot",
+        [18] = "RangedSlot",
+        [19] = "TabardSlot"
+    }
+    
+    local hooked = 0
+    for slotID, slotName in pairs(slotNames) do
+        local button = _G["Character" .. slotName]
+        if button then
+            -- Always re-hook to ensure fresh hooks
+            self:hookEquipmentButton(button, slotID)
+            self.hookedSlots[slotID] = true
+            hooked = hooked + 1
+        else
+            print("Failed to find button for slot:", slotName)
+        end
+    end
+    
+    print("Successfully hooked", hooked, "equipment slots")
+end
+
+function SpellMacroUI:hookEquipmentButton(button, slotID)
+    local self_ref = self
+    
+    -- Debug print to verify hook is being applied
+    print("Hooking equipment slot:", slotID, button:GetName())
+    
+    -- Ensure button registers right-clicks
+    button:RegisterForClicks("LeftButtonUp", "LeftButtonDown", "RightButtonUp", "RightButtonDown")
+    
+    -- Use HookScript for secure frames instead of SetScript
+    button:HookScript("OnClick", function(button_self, mouseButton, down)
+        -- Debug print to verify clicks are being detected
+        print("Equipment slot clicked:", slotID, "Button:", mouseButton, "Down:", down)
+        
+        if mouseButton == "RightButton" and not down then
+            -- Get equipped item
+            local itemID = GetInventoryItemID("player", slotID)
+            print("Item ID found:", itemID)
+            
+            if itemID then
+                -- Generate and show menu
+                local menuItems = self_ref.itemMacroManager:generateItemMenuItems(itemID, slotID)
+                print("Menu items generated:", #menuItems)
+                
+                MenuUtil.CreateContextMenu(button_self, function(ownerRegion, rootDescription)
+                    rootDescription:CreateTitle("Create Item Macro")
+                    
+                    for _, categoryItem in ipairs(menuItems) do
+                        if categoryItem.hasArrow and categoryItem.menuList then
+                            local submenu = rootDescription:CreateButton(categoryItem.text)
+                            for _, subItem in ipairs(categoryItem.menuList) do
+                                submenu:CreateButton(subItem.text, subItem.func)
+                            end
+                        else
+                            rootDescription:CreateButton(categoryItem.text, categoryItem.func)
+                        end
+                    end
+                end)
+            end
         end
     end)
 end
