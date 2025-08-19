@@ -307,8 +307,8 @@ end
 
 function SpellMacroManager:generateSpellMacro(spellId, macroType)
     local spellInfo = C_Spell.GetSpellInfo(spellId)
-    if not spellInfo then
-        -- Invalid spell ID
+    if not spellInfo or not spellInfo.name then
+        print("SpellMacroDropDown: Invalid spell ID or spell name not found: " .. tostring(spellId))
         return
     end
 
@@ -340,9 +340,13 @@ function SpellMacroManager:generateSpellMacro(spellId, macroType)
         counter = counter + 1
     end
 
-    CreateMacro(macroName, icon, macroText, true)
-    PickupMacro(macroName)
-    -- Created macro successfully
+    local success = pcall(CreateMacro, macroName, icon, macroText, true)
+    if success then
+        PickupMacro(macroName)
+        print("SpellMacroDropDown: Created macro '" .. macroName .. "'")
+    else
+        print("SpellMacroDropDown: Failed to create macro '" .. macroName .. "' - you may have reached the macro limit")
+    end
 end
 
 -- ItemMacroManager Class
@@ -392,9 +396,13 @@ function ItemMacroManager:generateItemMenuItems(itemID, slotID)
 end
 
 function ItemMacroManager:generateItemMacro(itemID, slotID, macroType)
-    local itemName, itemLink, _, _, _, _, _, _, _, itemTexture = GetItemInfo(itemID)
+    local itemInfo = C_Item.GetItemInfo(itemID)
+    if not itemInfo then
+        return
+    end
+    local itemName, itemLink, itemTexture = itemInfo.itemName, itemInfo.itemLink, itemInfo.itemIcon
     if not itemName then
-        -- Invalid item ID
+        print("SpellMacroDropDown: Invalid item ID or item name not found: " .. tostring(itemID))
         return
     end
     
@@ -418,9 +426,13 @@ function ItemMacroManager:generateItemMacro(itemID, slotID, macroType)
         counter = counter + 1
     end
     
-    CreateMacro(macroName, itemTexture, macroText, true)
-    PickupMacro(macroName)
-    -- Created item macro successfully
+    local success = pcall(CreateMacro, macroName, itemTexture, macroText, true)
+    if success then
+        PickupMacro(macroName)
+        print("SpellMacroDropDown: Created item macro '" .. macroName .. "'")
+    else
+        print("SpellMacroDropDown: Failed to create item macro '" .. macroName .. "' - you may have reached the macro limit")
+    end
 end
 
 -- Improved SpellMacroUI Class with better hooking
