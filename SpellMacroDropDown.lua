@@ -463,7 +463,6 @@ function SpellMacroUI.new()
     self.isInitialized = false
     self.spellMacroManager = SpellMacroManager.new()
     self.itemMacroManager = ItemMacroManager.new()
-    self.hookedButtons = {} -- Track hooked buttons
     self.hookedSlots = {} -- Track hooked equipment slots
     return self
 end
@@ -548,8 +547,7 @@ function SpellMacroUI:hookAllSpellButtons()
     local pagedFrame = PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame
     if not pagedFrame or not pagedFrame.framePoolCollection then return end
 
-    -- Clear old hooks to prevent conflicts
-    self.hookedButtons = {}
+    -- Re-hook all buttons to ensure correct spell IDs after tab changes
 
     local templates = {
         {template = "SpellBookItemTemplate", kind = "SPELL"},
@@ -561,32 +559,28 @@ function SpellMacroUI:hookAllSpellButtons()
         if pool then
             for elementFrame in pool:EnumerateActive() do
                 if elementFrame.Button and elementFrame.spellBookItemInfo and elementFrame.spellBookItemInfo.spellID then
-                    local buttonKey = tostring(elementFrame.Button)
-
-                    -- Only hook if not already hooked
-                    if not self.hookedButtons[buttonKey] then
-                        self:hookSpellButton(elementFrame.Button, elementFrame.spellBookItemInfo.spellID)
-                        self.hookedButtons[buttonKey] = true
-                    end
+                    -- Always re-hook buttons to ensure correct spell ID after tab changes
+                    self:hookSpellButton(elementFrame.Button, elementFrame)
                 end
             end
         end
     end
 end
 
-function SpellMacroUI:hookSpellButton(button, spellID)
+function SpellMacroUI:hookSpellButton(button, elementFrame)
     local self_ref = self
 
-    -- Store original click handler
-    local originalOnClick = button:GetScript("OnClick")
-
-    -- Set new click handler
-    button:SetScript("OnClick", function(button_self, mouseButton, down)
+    -- Use HookScript to avoid overwriting existing handlers
+    button:HookScript("OnClick", function(button_self, mouseButton, down)
         if mouseButton == "RightButton" and not down then
+            -- Get current spell ID dynamically from elementFrame
+            local currentSpellID = elementFrame.spellBookItemInfo and elementFrame.spellBookItemInfo.spellID
+            if not currentSpellID then return end
+            
             -- Handle right-click for macro creation
-            local spellInfo = C_Spell.GetSpellInfo(spellID)
+            local spellInfo = C_Spell.GetSpellInfo(currentSpellID)
             local spellName = (spellInfo and spellInfo.name) and spellInfo.name or "Unknown Spell"
-            local menuItems = self_ref.spellMacroManager:generateMenuItems(spellID)
+            local menuItems = self_ref.spellMacroManager:generateMenuItems(currentSpellID)
             MenuUtil.CreateContextMenu(button_self, function(ownerRegion, rootDescription)
                 rootDescription:CreateTitle(spellName)
 
@@ -601,15 +595,8 @@ function SpellMacroUI:hookSpellButton(button, spellID)
                     end
                 end
             end)
-        elseif mouseButton == "LeftButton" then
-            -- Don't override the default spellbook behavior
-            -- Let the default handler run by not preventing propagation
-            return
         end
     end)
-
-    -- Ensure button registers right-clicks
-    button:RegisterForClicks("LeftButtonUp", "LeftButtonDown", "RightButtonUp")
 end
 
 -- Enhanced initialization with multiple fallbacks
