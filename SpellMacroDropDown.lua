@@ -259,6 +259,13 @@ function MacroTemplate:getTemplate(macroType)
     return self.templates[macroType] or self.templates.NORMAL_CAST
 end
 
+-- Helper function to extract item name from item link
+local function GetItemNameFromLink(itemLink)
+    if not itemLink then return nil end
+    local itemName = itemLink:match("|h%[(.-)%]|h")
+    return itemName
+end
+
 -- SpellMacroManager Class
 local SpellMacroManager = {}
 SpellMacroManager.__index = SpellMacroManager
@@ -396,11 +403,23 @@ function ItemMacroManager:generateItemMenuItems(itemID, slotID)
 end
 
 function ItemMacroManager:generateItemMacro(itemID, slotID, macroType)
-    local itemInfo = C_Item.GetItemInfo(itemID)
-    if not itemInfo then
-        return
+    local itemName, itemLink, itemTexture
+    
+    -- For equipped items, use GetInventoryItemLink (more reliable)
+    if slotID then
+        itemLink = GetInventoryItemLink("player", slotID)
+        itemName = GetItemNameFromLink(itemLink)
+        itemTexture = GetInventoryItemTexture("player", slotID)
     end
-    local itemName, itemLink, itemTexture = itemInfo.itemName, itemInfo.itemLink, itemInfo.itemIcon
+    
+    -- Fallback to C_Item.GetItemInfo if not equipped or if above failed
+    if not itemName then
+        local itemInfo = C_Item.GetItemInfo(itemID)
+        if itemInfo then
+            itemName, itemLink, itemTexture = itemInfo.itemName, itemInfo.itemLink, itemInfo.itemIcon
+        end
+    end
+    
     if not itemName then
         print("SpellMacroDropDown: Invalid item ID or item name not found: " .. tostring(itemID))
         return
@@ -565,9 +584,11 @@ function SpellMacroUI:hookSpellButton(button, spellID)
     button:SetScript("OnClick", function(button_self, mouseButton, down)
         if mouseButton == "RightButton" and not down then
             -- Handle right-click for macro creation
+            local spellInfo = C_Spell.GetSpellInfo(spellID)
+            local spellName = (spellInfo and spellInfo.name) and spellInfo.name or "Unknown Spell"
             local menuItems = self_ref.spellMacroManager:generateMenuItems(spellID)
             MenuUtil.CreateContextMenu(button_self, function(ownerRegion, rootDescription)
-                rootDescription:CreateTitle("Create Macro")
+                rootDescription:CreateTitle(spellName)
 
                 for _, categoryItem in ipairs(menuItems) do
                     if categoryItem.hasArrow and categoryItem.menuList then
@@ -836,12 +857,16 @@ function SpellMacroUI:hookEquipmentButton(button, slotID)
             -- Item ID found
             
             if itemID then
+                -- Get item info for menu title using inventory link (more reliable for equipped items)
+                local itemLink = GetInventoryItemLink("player", slotID)
+                local itemName = GetItemNameFromLink(itemLink) or "Unknown Item"
+                
                 -- Generate and show menu
                 local menuItems = self_ref.itemMacroManager:generateItemMenuItems(itemID, slotID)
                 -- Menu items generated
                 
                 MenuUtil.CreateContextMenu(button_self, function(ownerRegion, rootDescription)
-                    rootDescription:CreateTitle("Create Item Macro")
+                    rootDescription:CreateTitle(itemName)
                     
                     for _, categoryItem in ipairs(menuItems) do
                         if categoryItem.hasArrow and categoryItem.menuList then
