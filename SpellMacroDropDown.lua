@@ -146,18 +146,10 @@ function SpellMacroUI:hookAllSpellButtons()
         if pool then
             for elementFrame in pool:EnumerateActive() do
                 if elementFrame.Button and not elementFrame.Button.__SMD_Hooked then
-
-                    -- Method 1: Use PreClick to intercept and block right-clicks
-                    elementFrame.Button:SetScript("PreClick", function(button_self, button, down)
-                        if button == "RightButton" then
-                            -- Block the click entirely
-                            return
-                        end
-                    end)
-
-                    -- Method 2: Override the click handler completely
-                    elementFrame.Button:SetScript("OnClick", function(button_self, button, down)
-                        if button == "RightButton" then
+                    -- Use OnMouseUp handler - NOT affected by RegisterForClicks restrictions
+                    -- HookScript doesn't override the original behavior, just adds to it
+                    elementFrame.Button:HookScript("OnMouseUp", function(button_self, mouseButton)
+                        if mouseButton == "RightButton" then
                             local spellID = elementFrame.spellBookItemInfo and elementFrame.spellBookItemInfo.spellID
                             if spellID then
                                 local menuItems = self_ref.spellMacroManager:generateMenuItems(spellID)
@@ -170,46 +162,8 @@ function SpellMacroUI:hookAllSpellButtons()
                                     end
                                 end)
                             end
-                            return -- Block further processing
-                        else
-                            -- For left clicks, let the default behavior happen
-                            -- We need to manually trigger the spell pickup since we're overriding OnClick
-                            if button == "LeftButton" and not down then
-                                local spellID = elementFrame.spellBookItemInfo and elementFrame.spellBookItemInfo.spellID
-                                if spellID then
-                                    C_Spell.PickupSpell(spellID)
-                                end
-                            end
                         end
                     end)
-
-                    -- Method 3: Disable right-click attribute entirely
-                    elementFrame.Button:RegisterForClicks("LeftButtonUp", "LeftButtonDown")
-
-                    -- Method 4: Create invisible overlay to catch right-clicks
-                    if not elementFrame.Button.rightClickBlocker then
-                        local blocker = CreateFrame("Button", nil, elementFrame.Button)
-                        blocker:SetAllPoints(elementFrame.Button)
-                        blocker:SetFrameLevel(elementFrame.Button:GetFrameLevel() + 1)
-                        blocker:RegisterForClicks("RightButtonUp")
-                        blocker:SetScript("OnClick", function(blocker_self, button)
-                            if button == "RightButton" then
-                                local spellID = elementFrame.spellBookItemInfo and elementFrame.spellBookItemInfo.spellID
-                                if spellID then
-                                    local menuItems = self_ref.spellMacroManager:generateMenuItems(spellID)
-                                    MenuUtil.CreateContextMenu(elementFrame.Button, function(ownerRegion, rootDescription)
-                                        rootDescription:CreateTitle("Create Macro")
-                                        for _, menuItem in ipairs(menuItems) do
-                                            rootDescription:CreateButton(menuItem.text, function()
-                                                menuItem.func()
-                                            end)
-                                        end
-                                    end)
-                                end
-                            end
-                        end)
-                        elementFrame.Button.rightClickBlocker = blocker
-                    end
 
                     elementFrame.Button.__SMD_Hooked = true
                 end
