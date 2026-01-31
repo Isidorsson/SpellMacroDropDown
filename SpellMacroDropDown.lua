@@ -4,40 +4,81 @@ MacroTemplate.__index = MacroTemplate
 
 function MacroTemplate.new()
     local self = setmetatable({}, MacroTemplate)
-    self.types = {
-        NORMAL_CAST = "Cast Normal",
-        MOUSEOVER_BASIC = "Cast @Mouseover",
-        MOUSEOVER_HARM = "Cast @Mouseover Harm",
-        MOUSEOVER_HELP = "Cast @Mouseover Help",
-        MOUSEOVER_HARM_OR_HELP = "Cast @Mouseover Harm/Help",
-        MOUSEOVER_HARM_OR_HELP_OR_TARGET = "Cast @Mouseover Harm/Help/Target",
-        MOUSEOVER_CAST = "Cast @Mouseover Any",
-        CURSOR_CAST = "Cast @Cursor",
-        CAST_PLAYER = "Cast @Self",
-        RANDOM_FRIENDLY = "Cast Random Friend",
-        RANDOM_ENEMY = "Cast Random Enemy",
-        CAST_FOCUS = "Cast @Focus"
+
+    -- Hierarchical categories with items
+    self.categories = {
+        {
+            name = "Basic",
+            items = {
+                { label = "Normal", template = "#showtooltip\n/cast %s" },
+                { label = "Stopcasting + Cast", template = "#showtooltip\n/stopcasting\n/cast %s" },
+                { label = "@Cursor", template = "#showtooltip\n/cast [@cursor] %s" },
+            }
+        },
+        {
+            name = "Mouseover",
+            items = {
+                { label = "Basic", template = "#showtooltip\n/cast [@mouseover,exists,nodead][] %s" },
+                { label = "Harm Only", template = "#showtooltip\n/cast [@mouseover,harm,nodead][] %s" },
+                { label = "Help Only", template = "#showtooltip\n/cast [@mouseover,help,nodead][] %s" },
+                { label = "Any", template = "#showtooltip\n/cast [@mouseover] %s" },
+            }
+        },
+        {
+            name = "Friendly Targets",
+            items = {
+                { label = "@Self", template = "#showtooltip\n/stopspelltarget\n/cast [@player] %s" },
+                { label = "@Pet", template = "#showtooltip\n/cast [@pet,exists,nodead][] %s" },
+                { label = "@Focus", template = "#showtooltip\n/cast [@focus,exists,nodead][@mouseover,exists,nodead][] %s" },
+                { label = "@Tank", template = "#showtooltip\n/cast [@tank,exists,nodead][] %s" },
+                { label = "@Party1", template = "#showtooltip\n/cast [@party1,exists,nodead] %s" },
+                { label = "@Party2", template = "#showtooltip\n/cast [@party2,exists,nodead] %s" },
+                { label = "@Party3", template = "#showtooltip\n/cast [@party3,exists,nodead] %s" },
+                { label = "@Party4", template = "#showtooltip\n/cast [@party4,exists,nodead] %s" },
+                { label = "Random Friend", template = "#showtooltip\n/targetfriendplayer\n/cast %s\n/cleartarget" },
+            }
+        },
+        {
+            name = "Enemy Targets",
+            items = {
+                { label = "@Boss1", template = "#showtooltip\n/cast [@boss1,exists] %s" },
+                { label = "@Boss2", template = "#showtooltip\n/cast [@boss2,exists] %s" },
+                { label = "@Boss3", template = "#showtooltip\n/cast [@boss3,exists] %s" },
+                { label = "@Boss4", template = "#showtooltip\n/cast [@boss4,exists] %s" },
+                { label = "@Boss5", template = "#showtooltip\n/cast [@boss5,exists] %s" },
+                { label = "@Arena1", template = "#showtooltip\n/cast [@arena1,exists] %s" },
+                { label = "@Arena2", template = "#showtooltip\n/cast [@arena2,exists] %s" },
+                { label = "@Arena3", template = "#showtooltip\n/cast [@arena3,exists] %s" },
+                { label = "Random Enemy", template = "#showtooltip\n/targetenemyplayer\n/cast %s\n/cleartarget" },
+            }
+        },
+        {
+            name = "Smart Targeting",
+            items = {
+                { label = "Mouseover > Focus > Target", template = "#showtooltip\n/cast [@mouseover,exists,nodead][@focus,exists,nodead][] %s" },
+                { label = "Mouseover > Focus > Self", template = "#showtooltip\n/cast [@mouseover,exists,nodead][@focus,exists,nodead][@player] %s" },
+                { label = "Focus > Mouseover > Target", template = "#showtooltip\n/cast [@focus,exists,nodead][@mouseover,exists,nodead][] %s" },
+                { label = "Focus > Pet > Self", template = "#showtooltip\n/cast [@focus,exists,nodead][@pet,exists,nodead][@player] %s" },
+                { label = "Pet > Focus > Tank", template = "#showtooltip\n/cast [@pet,exists,nodead][@focus,exists,nodead][@tank,exists,nodead] %s" },
+                { label = "Mouseover > Tank > Self", template = "#showtooltip\n/cast [@mouseover,exists,nodead][@tank,exists,nodead][@player] %s" },
+                { label = "Focus > Tank > Self", template = "#showtooltip\n/cast [@focus,exists,nodead][@tank,exists,nodead][@player] %s" },
+            }
+        },
     }
 
-    self.templates = {
-        [self.types.NORMAL_CAST] = "#showtooltip\n/cast %s",
-        [self.types.MOUSEOVER_BASIC] = "#showtooltip\n/cast [@mouseover,exists,nodead] [] %s",
-        [self.types.MOUSEOVER_HARM] = "#showtooltip\n/cast [@mouseover,harm,nodead] [] %s",
-        [self.types.MOUSEOVER_HELP] = "#showtooltip\n/cast [@mouseover,help,nodead] [] %s",
-        [self.types.MOUSEOVER_HARM_OR_HELP] = "#showtooltip\n/cast [@mouseover,harm,nodead][@mouseover,help,nodead] [] %s",
-        [self.types.MOUSEOVER_HARM_OR_HELP_OR_TARGET] = "#showtooltip\n/cast [@mouseover,harm,nodead][@mouseover,help,nodead][@targettarget,harm,nodead] [] %s",
-        [self.types.MOUSEOVER_CAST] = "#showtooltip\n/cast [@mouseover] %s",
-        [self.types.CURSOR_CAST] = "#showtooltip\n/cast [@cursor] %s",
-        [self.types.CAST_PLAYER] = "#showtooltip\n/stopspelltarget\n/cast [@player] %s",
-        [self.types.RANDOM_FRIENDLY] = "#showtooltip\n/targetfriendplayer\n/cast %s\n/cleartarget",
-        [self.types.RANDOM_ENEMY] = "#showtooltip\n/targetenemyplayer\n/cast %s\n/cleartarget",
-        [self.types.CAST_FOCUS] = "#showtooltip\n/cast [@focus,exists,nodead][@mouseover,exists,nodead][] %s"
-    }
+    -- Build lookup table for getTemplate
+    self.templateLookup = {}
+    for _, category in ipairs(self.categories) do
+        for _, item in ipairs(category.items) do
+            self.templateLookup[item.label] = item.template
+        end
+    end
+
     return self
 end
 
 function MacroTemplate:getTemplate(macroType)
-    return self.templates[macroType] or self.templates[self.types.NORMAL_CAST]
+    return self.templateLookup[macroType] or "#showtooltip\n/cast %s"
 end
 
 -- SpellMacroManager Class
@@ -50,18 +91,16 @@ function SpellMacroManager.new()
     return self
 end
 
-function SpellMacroManager:generateMenuItems(spellId)
-    local menuItems = {}
-    for macroType, _ in pairs(self.macroTemplate.templates) do
-        local actionText = macroType:gsub("_", " "):gsub("^%l", string.upper)
-        table.insert(menuItems, {
-            text = actionText,
-            func = function()
-                self:generateSpellMacro(spellId, macroType)
-            end
-        })
+function SpellMacroManager:buildContextMenu(spellId, rootDescription)
+    rootDescription:CreateTitle("Create Macro")
+    for _, category in ipairs(self.macroTemplate.categories) do
+        local submenu = rootDescription:CreateButton(category.name)
+        for _, item in ipairs(category.items) do
+            submenu:CreateButton(item.label, function()
+                self:generateSpellMacro(spellId, item.label)
+            end)
+        end
     end
-    return menuItems
 end
 
 function SpellMacroManager:generateSpellMacro(spellId, macroType)
@@ -98,6 +137,7 @@ function SpellMacroUI.new()
     local self = setmetatable({}, SpellMacroUI)
     self.isInitialized = false
     self.spellMacroManager = SpellMacroManager.new()
+    self.hookedButtons = setmetatable({}, {__mode = "k"}) -- Weak keys for GC
     return self
 end
 
@@ -122,7 +162,7 @@ function SpellMacroUI:initialize()
     -- Re-hook on spellbook updates
     if PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame and PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame.UpdateSpells then
         hooksecurefunc(PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame, "UpdateSpells", function()
-            C_Timer.After(0.1, function() -- Small delay to ensure buttons are created
+            C_Timer.After(0, function() -- Next frame, more reliable
                 self:hookAllSpellButtons()
             end)
         end)
@@ -145,27 +185,30 @@ function SpellMacroUI:hookAllSpellButtons()
         local pool = pagedFrame.framePoolCollection:GetPool(info.template, info.kind)
         if pool then
             for elementFrame in pool:EnumerateActive() do
-                if elementFrame.Button and not elementFrame.Button.__SMD_Hooked then
-                    -- Use OnMouseUp handler - NOT affected by RegisterForClicks restrictions
-                    -- HookScript doesn't override the original behavior, just adds to it
-                    elementFrame.Button:HookScript("OnMouseUp", function(button_self, mouseButton)
+                if elementFrame.Button and not self_ref.hookedButtons[elementFrame.Button] then
+                    -- PreClick: Block right-click spell cast
+                    elementFrame.Button:HookScript("PreClick", function(button_self, mouseButton)
                         if mouseButton == "RightButton" then
+                            button_self:SetAttribute("type", nil)
+                            button_self.__SMD_RightClicked = true
+                        end
+                    end)
+
+                    -- PostClick: Restore and show menu
+                    elementFrame.Button:HookScript("PostClick", function(button_self, mouseButton)
+                        if mouseButton == "RightButton" and button_self.__SMD_RightClicked then
+                            button_self.__SMD_RightClicked = nil
+                            button_self:SetAttribute("type", "spell")
                             local spellID = elementFrame.spellBookItemInfo and elementFrame.spellBookItemInfo.spellID
                             if spellID then
-                                local menuItems = self_ref.spellMacroManager:generateMenuItems(spellID)
                                 MenuUtil.CreateContextMenu(button_self, function(ownerRegion, rootDescription)
-                                    rootDescription:CreateTitle("Create Macro")
-                                    for _, menuItem in ipairs(menuItems) do
-                                        rootDescription:CreateButton(menuItem.text, function()
-                                            menuItem.func()
-                                        end)
-                                    end
+                                    self_ref.spellMacroManager:buildContextMenu(spellID, rootDescription)
                                 end)
                             end
                         end
                     end)
 
-                    elementFrame.Button.__SMD_Hooked = true
+                    self_ref.hookedButtons[elementFrame.Button] = true
                 end
             end
         end
@@ -176,22 +219,20 @@ end
 local ui = SpellMacroUI.new()
 local addonFrame = CreateFrame("Frame")
 addonFrame:RegisterEvent("ADDON_LOADED")
-addonFrame:RegisterEvent("PLAYER_LOGIN")
 
 addonFrame:SetScript("OnEvent", function(_, event, addonName)
     if event == "ADDON_LOADED" and addonName == "Blizzard_PlayerSpells" then
-        -- PlayerSpells addon loaded, hook when frame is shown
+        addonFrame:UnregisterEvent("ADDON_LOADED")
+
         if PlayerSpellsFrame then
             PlayerSpellsFrame:HookScript("OnShow", function()
                 ui:initialize()
             end)
-        end
-    elseif event == "PLAYER_LOGIN" then
-        -- Fallback initialization
-        C_Timer.After(2, function()
-            if PlayerSpellsFrame and PlayerSpellsFrame:IsVisible() then
+
+            -- Initialize immediately if already visible
+            if PlayerSpellsFrame:IsVisible() then
                 ui:initialize()
             end
-        end)
+        end
     end
 end)
