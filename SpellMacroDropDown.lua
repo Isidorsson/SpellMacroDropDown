@@ -64,6 +64,19 @@ function MacroTemplate.new()
                 { label = "Focus > Tank > Self", template = "#showtooltip\n/cast [@focus,exists,nodead][@tank,exists,nodead][@player] %s" },
             }
         },
+        {
+            name = "Pet Commands",
+            items = {
+                { label = "Cast + Pet Attack", template = "#showtooltip\n/petattack\n/cast %s" },
+                { label = "Cast + Pet Follow", template = "#showtooltip\n/petfollow\n/cast %s" },
+                { label = "Stopcasting + Pet Attack", template = "#showtooltip\n/stopcasting\n/petattack\n/cast %s" },
+                { label = "Cast on Pet", template = "#showtooltip\n/cast [@pet,exists,nodead] %s" },
+                { label = "Mouseover + Pet Attack", template = "#showtooltip\n/petattack\n/cast [@mouseover,exists,nodead][] %s" },
+                { label = "Cast + Pet Assist", template = "#showtooltip\n/petassist\n/cast %s" },
+                { label = "Cast + Pet Passive", template = "#showtooltip\n/petpassive\n/cast %s" },
+                { label = "Pet Toggle + Cast", template = "#showtooltip\n/petfollow [@pettarget,exists]\n/petattack [@pettarget,noexists]\n/cast %s" },
+            }
+        },
     }
 
     -- Build lookup table for getTemplate
