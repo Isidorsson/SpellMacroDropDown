@@ -169,17 +169,25 @@ function SpellMacroUI:initialize()
     end)
     macroButton:Show()
 
-    -- Hook spell buttons initially and on spellbook updates
-    self:hookAllSpellButtons()
-
-    -- Re-hook on spellbook updates
-    if PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame and PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame.UpdateSpells then
-        hooksecurefunc(PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame, "UpdateSpells", function()
-            C_Timer.After(0, function() -- Next frame, more reliable
+    -- Re-hook on spellbook updates (page changes, tab switches)
+    local pagedFrame = PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame
+    if pagedFrame and pagedFrame.UpdateSpells then
+        hooksecurefunc(pagedFrame, "UpdateSpells", function()
+            C_Timer.After(0, function()
                 self:hookAllSpellButtons()
             end)
         end)
     end
+
+    -- Re-hook every time the spellbook is shown (handles stale pool frames)
+    PlayerSpellsFrame.SpellBookFrame:HookScript("OnShow", function()
+        C_Timer.After(0, function()
+            self:hookAllSpellButtons()
+        end)
+    end)
+
+    -- Hook current buttons now
+    self:hookAllSpellButtons()
 end
 
 -- Hook spell buttons with proper right-click handling
@@ -188,42 +196,34 @@ function SpellMacroUI:hookAllSpellButtons()
     local pagedFrame = PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame
     if not pagedFrame or not pagedFrame.framePoolCollection then return end
 
-    -- Handle both left and right page templates
-    local templates = {
-        {template = "SpellBookItemTemplate", kind = "SPELL"},
-        {template = "SpellBookItemTemplateRightPage", kind = "SPELL_RIGHT"},
-    }
-
-    for _, info in ipairs(templates) do
-        local pool = pagedFrame.framePoolCollection:GetPool(info.template, info.kind)
-        if pool then
-            for elementFrame in pool:EnumerateActive() do
-                if elementFrame.Button and not self_ref.hookedButtons[elementFrame.Button] then
-                    -- PreClick: Block right-click spell cast
-                    elementFrame.Button:HookScript("PreClick", function(button_self, mouseButton)
-                        if mouseButton == "RightButton" then
-                            button_self:SetAttribute("type", nil)
-                            button_self.__SMD_RightClicked = true
-                        end
-                    end)
-
-                    -- PostClick: Restore and show menu
-                    elementFrame.Button:HookScript("PostClick", function(button_self, mouseButton)
-                        if mouseButton == "RightButton" and button_self.__SMD_RightClicked then
-                            button_self.__SMD_RightClicked = nil
-                            button_self:SetAttribute("type", "spell")
-                            local spellID = elementFrame.spellBookItemInfo and elementFrame.spellBookItemInfo.spellID
-                            if spellID then
-                                MenuUtil.CreateContextMenu(button_self, function(ownerRegion, rootDescription)
-                                    self_ref.spellMacroManager:buildContextMenu(spellID, rootDescription)
-                                end)
-                            end
-                        end
-                    end)
-
-                    self_ref.hookedButtons[elementFrame.Button] = true
+    -- Enumerate all active frames from all pools (more reliable than GetPool with specific keys)
+    for elementFrame in pagedFrame.framePoolCollection:EnumerateActive() do
+        if elementFrame.Button and not self_ref.hookedButtons[elementFrame.Button] then
+            -- PreClick: Block right-click spell cast
+            elementFrame.Button:HookScript("PreClick", function(button_self, mouseButton)
+                if mouseButton == "RightButton" and not InCombatLockdown() then
+                    button_self:SetAttribute("type", nil)
+                    button_self.__SMD_RightClicked = true
                 end
-            end
+            end)
+
+            -- PostClick: Restore and show menu
+            elementFrame.Button:HookScript("PostClick", function(button_self, mouseButton)
+                if mouseButton == "RightButton" and button_self.__SMD_RightClicked then
+                    button_self.__SMD_RightClicked = nil
+                    if not InCombatLockdown() then
+                        button_self:SetAttribute("type", "spell")
+                    end
+                    local spellID = elementFrame.spellBookItemInfo and elementFrame.spellBookItemInfo.spellID
+                    if spellID then
+                        MenuUtil.CreateContextMenu(button_self, function(ownerRegion, rootDescription)
+                            self_ref.spellMacroManager:buildContextMenu(spellID, rootDescription)
+                        end)
+                    end
+                end
+            end)
+
+            self_ref.hookedButtons[elementFrame.Button] = true
         end
     end
 end
@@ -231,21 +231,29 @@ end
 -- Initialize the addon
 local ui = SpellMacroUI.new()
 local addonFrame = CreateFrame("Frame")
-addonFrame:RegisterEvent("ADDON_LOADED")
 
-addonFrame:SetScript("OnEvent", function(_, event, addonName)
-    if event == "ADDON_LOADED" and addonName == "Blizzard_PlayerSpells" then
-        addonFrame:UnregisterEvent("ADDON_LOADED")
+local function setupPlayerSpellsHooks()
+    if not PlayerSpellsFrame then return end
 
-        if PlayerSpellsFrame then
-            PlayerSpellsFrame:HookScript("OnShow", function()
-                ui:initialize()
-            end)
+    PlayerSpellsFrame:HookScript("OnShow", function()
+        ui:initialize()
+    end)
 
-            -- Initialize immediately if already visible
-            if PlayerSpellsFrame:IsVisible() then
-                ui:initialize()
-            end
-        end
+    -- Initialize immediately if already visible
+    if PlayerSpellsFrame:IsVisible() then
+        ui:initialize()
     end
-end)
+end
+
+-- Check if Blizzard_PlayerSpells is already loaded (e.g., /reload while spellbook was open)
+if C_AddOns.IsAddOnLoaded("Blizzard_PlayerSpells") then
+    setupPlayerSpellsHooks()
+else
+    addonFrame:RegisterEvent("ADDON_LOADED")
+    addonFrame:SetScript("OnEvent", function(_, event, addonName)
+        if event == "ADDON_LOADED" and addonName == "Blizzard_PlayerSpells" then
+            addonFrame:UnregisterEvent("ADDON_LOADED")
+            setupPlayerSpellsHooks()
+        end
+    end)
+end
